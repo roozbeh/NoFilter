@@ -30,13 +30,30 @@
 
         <TextView style="@style/AppTheme" android:text="@string/servers_list" android:id="@+id/servers_list_lbl"/>
 
-        <ListView
-            android:id="@+id/servers_list"
+        <LinearLayout
             android:layout_width="match_parent"
-            android:background="@drawable/bg_key"
-            android:layout_height="100dp" >
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="0mm">
 
-        </ListView>
+            <ImageView
+                android:id="@+id/img_animation"
+                android:layout_width="100dp"
+                android:background="@drawable/bg_key"
+                android:layout_height="100dp" >
+            </ImageView>
+
+            <ListView
+                android:id="@+id/servers_list"
+                android:layout_width="wrap_content"
+                android:background="@drawable/bg_key"
+                android:layout_height="100dp" >
+
+            </ListView>
+
+
+        </LinearLayout>
+
 
     </LinearLayout>
 </ScrollView>

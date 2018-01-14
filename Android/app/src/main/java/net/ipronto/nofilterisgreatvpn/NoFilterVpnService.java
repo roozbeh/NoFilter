@@ -32,7 +32,7 @@ import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class VpnService extends android.net.VpnService implements Handler.Callback {
+public class NoFilterVpnService extends android.net.VpnService implements Handler.Callback {
     private static final String TAG = "VpnConnection";
 
     public static final String ACTION_CONNECT = "com.example.android.toyvpn.START";

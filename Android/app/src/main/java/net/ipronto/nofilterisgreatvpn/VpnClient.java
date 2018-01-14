@@ -18,16 +18,19 @@ package net.ipronto.nofilterisgreatvpn;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Message;
 import android.util.Log;
-import android.view.View;
-import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
+
+import com.koushikdutta.ion.Ion;
+import com.koushikdutta.ion.builder.AnimateGifMode;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -40,12 +43,15 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 
+import com.facebook.ads.*;
+
 public class VpnClient extends Activity {
     protected MyApp mMyApp;
     TextView status_msg;
     Button btnConnect;
     Button btnDisconnect;
     ListView listView;
+    ImageView imgAnimation;
 
     private void connectToVPN() {
         Intent intent = android.net.VpnService.prepare(VpnClient.this);
@@ -59,7 +65,7 @@ public class VpnClient extends Activity {
     }
 
     private void disconnectVPN() {
-        startService(getServiceIntent().setAction(VpnService.ACTION_DISCONNECT));
+        startService(getServiceIntent().setAction(NoFilterVpnService.ACTION_DISCONNECT));
         btnConnect.setEnabled(true);
     }
 
@@ -71,50 +77,59 @@ public class VpnClient extends Activity {
         status_msg = (TextView) findViewById(R.id.status_msg);
         btnConnect = (Button) findViewById(R.id.connect);
         btnDisconnect = (Button) findViewById(R.id.disconnect);
-
+        imgAnimation = (ImageView) findViewById(R.id.img_animation);
         mMyApp = (MyApp)this.getApplicationContext();
         mMyApp.setCurrentActivity(this);
 
         btnConnect.setEnabled(false);
         btnDisconnect.setEnabled(false);
 
+        Ion.with(imgAnimation)
+                .animateGif(AnimateGifMode.NO_ANIMATE)
+                .load("file:///android_asset/connecting.gif");
+
         btnConnect.setOnClickListener(v -> {
             connectToVPN();
+
+            Log.i("VpnConnection", "Setting the animation");
+            Ion.with(imgAnimation)
+                    .animateGif(AnimateGifMode.ANIMATE)
+                    .load("file:///android_asset/connecting.gif");
+
         });
 
         btnDisconnect.setOnClickListener(v -> {
             disconnectVPN();
+
+            Log.i("VpnConnection", "Removing the animation 1");
+            Ion.with(imgAnimation)
+                    .animateGif(AnimateGifMode.NO_ANIMATE)
+                    .load("file:///android_asset/connecting.gif");
         });
 
 
         listView = (ListView) findViewById(R.id.servers_list);
-        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-            @Override
-            public void onItemClick(AdapterView<?> adapterView, View view, int position, long arg3) {
-                Log.i("VpnConnection", "Item selected: " + position);
-                for (int j = 0; j < adapterView.getChildCount(); j++)
-                    adapterView.getChildAt(j).setBackgroundColor(Color.TRANSPARENT);
+        listView.setOnItemClickListener((adapterView, view, position, arg3) -> {
+            Log.i("VpnConnection", "Item selected: " + position);
+            for (int j = 0; j < adapterView.getChildCount(); j++)
+                adapterView.getChildAt(j).setBackgroundColor(Color.TRANSPARENT);
 
-                // change the background color of the selected element
-                view.setBackgroundColor(Color.LTGRAY);
-                selectedServer = servers.get(position);
-            }
+            // change the background color of the selected element
+            view.setBackgroundColor(Color.LTGRAY);
+            selectedServer = servers.get(position);
         });
 
 
-        new Thread(new Runnable(){
-            @Override
-            public void run() {
-                try {
-                    getServersList("https://s3.eu-central-1.amazonaws.com/nofiltervpn/config.json");
-                } catch(Exception e) {
-                    Log.e("VpnConnection", "Could not fetch servers list", e);
-                }
+        new Thread(() -> {
+            try {
+                getServersList("https://s3.eu-central-1.amazonaws.com/nofiltervpn/config.json");
+            } catch(Exception e) {
+                Log.e("VpnConnection", "Could not fetch servers list", e);
             }
         }).start();
     }
 
-    class ServerData {
+    public class ServerData {
         String address;
         int port;
         String secret;
@@ -122,10 +137,13 @@ public class VpnClient extends Activity {
     }
 
     private ArrayList<ServerData> servers;
+    private String[] serverNames;
     private ServerData selectedServer = null;
 
-    public void getServersList(String urlString) throws IOException, JSONException {
-        HttpURLConnection urlConnection = null;
+    private String getHttpData(String urlString) throws IOException {
+        Log.i("VpnConnection", "Requesting server list from Web");
+
+        HttpURLConnection urlConnection;
         URL url = new URL(urlString);
         urlConnection = (HttpURLConnection) url.openConnection();
         urlConnection.setRequestMethod("GET");
@@ -139,16 +157,37 @@ public class VpnClient extends Activity {
 
         String line;
         while ((line = br.readLine()) != null) {
-            sb.append(line + "\n");
+            sb.append(line).append("\n");
         }
         br.close();
 
-        String jsonString = sb.toString();
-        System.out.println("JSON: " + jsonString);
+        return sb.toString();
+    }
 
-        JSONObject serversData = new JSONObject(jsonString);
+    private String getServerListFromCacheOrHttp(String urlString) throws IOException {
+        String serverListJson = "";
+        SharedPreferences sharedPreferences = getPreferences(MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        long cachedTime = sharedPreferences.getLong("server_list_time", 0);
+        if (cachedTime == 0 || cachedTime< (System.currentTimeMillis() - 86400)) {
+            serverListJson = getHttpData(urlString);
+            editor.putString("server_list", serverListJson);
+            editor.putLong("server_list_time", System.currentTimeMillis());
+            editor.apply();
+        } else {
+            Log.i("VpnConnection", "Requesting server list from Cache");
+            serverListJson = sharedPreferences.getString("server_list", "");
+        }
+
+        System.out.println("JSON: " + serverListJson);
+
+        return serverListJson;
+    }
+
+    private void parseServerList(String serverListJson) throws JSONException {
+        JSONObject serversData = new JSONObject(serverListJson);
         JSONArray serversArr = serversData.getJSONArray("servers");
-        String[] serverNames = new String[serversArr.length()];
+        serverNames = new String[serversArr.length()];
         servers = new ArrayList<>();
         for (int i=0;i<serversArr.length();i++) {
             JSONObject serverOnj = serversArr.getJSONObject(i);
@@ -161,32 +200,34 @@ public class VpnClient extends Activity {
 
             servers.add(sd);
         }
+    }
 
-        ArrayAdapter adapter = new ArrayAdapter<String>(this,
+    public void getServersList(String urlString) throws IOException, JSONException {
+        String serverListJson = getServerListFromCacheOrHttp(urlString);
+        parseServerList(serverListJson);
+
+        ArrayAdapter adapter = new ArrayAdapter<>(this,
                 R.layout.activity_listview, serverNames);
 
-        this.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                listView.setAdapter(adapter);
+        this.runOnUiThread(() -> {
+            listView.setAdapter(adapter);
 
-                listView.setSelection(0);
-                selectedServer = servers.get(0);
+            listView.setSelection(0);
+            selectedServer = servers.get(0);
 
-                btnConnect.setEnabled(true);
-            }
+            btnConnect.setEnabled(true);
         });
     }
 
     @Override
     protected void onActivityResult(int request, int result, Intent data) {
         if (result == RESULT_OK) {
-            startService(getServiceIntent().setAction(VpnService.ACTION_CONNECT));
+            startService(getServiceIntent().setAction(NoFilterVpnService.ACTION_CONNECT));
         }
     }
 
     private Intent getServiceIntent() {
-        return new Intent(this, VpnService.class);
+        return new Intent(this, NoFilterVpnService.class);
     }
 
     protected void onResume() {
@@ -210,6 +251,13 @@ public class VpnClient extends Activity {
 
     public void handleMessage(Message message) {
         status_msg.setText(message.what);
+
+        if (message.what != R.string.connecting) {
+            Log.i("VpnConnection", "Removing the animation 2");
+            Ion.with(imgAnimation)
+                    .animateGif(AnimateGifMode.NO_ANIMATE)
+                    .load("file:///android_asset/connecting.gif");
+        }
 
         if (message.what == R.string.disconnected) {
             btnConnect.setEnabled(true);

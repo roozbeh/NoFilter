@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit;
 
 public class VpnConnection implements Runnable {
     /**
-     * Callback interface to let the {@link VpnService} know about new connections
+     * Callback interface to let the {@link NoFilterVpnService} know about new connections
      * and update the foreground notification with connection status.
      */
     public interface OnEstablishListener {
