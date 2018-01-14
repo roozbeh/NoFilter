@@ -1,0 +1,20 @@
+scp t.tgz
+sudo apt-get update
+sudo apt-get install make
+sudo apt-get install g++
+
+sudo -i
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+
+for i in {0..100}; do 
+    ip tuntap add dev tun$i mode tun; 
+    ifconfig tun$i 10.0.0.$((i*2 + 1)) dstaddr 10.0.0.$((i*2 + 2)) up
+done
+
+cd /home/ubuntu/linux/
+killall VpnServer
+for i in {0..100}; do 
+    nohup ./VpnServer tun$i 8000 testfu -m 1400 -a 10.0.0.$((i*2 + 2)) 32 -d 8.8.8.8 -r 0.0.0.0 0 &
+done

@@ -1,0 +1,6 @@
+protocol = ssh
+user = ubuntu
+password = bah62bah
+host = ipronto.net
+path = /home/ubuntu/ToyVPN/server/linux
+cli_options = -i /Users/roozbeh/RoozbehMacbookPro.pem -C

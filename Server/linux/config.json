@@ -1,0 +1,19 @@
+{
+  "servers": [
+	  {
+	    "region": "eu-central-1",
+	    "name": "Germany",
+	    "secret": "testfu",
+	    "port": 8000,
+			"address": "52.59.158.235"
+	  },
+    {
+      "region": "us-west-2",
+      "name": "US West - Oregon",
+      "secret": "test",
+      "port": 8000,
+			"address": "52.26.32.11"
+    }
+  ],
+  "version": 1.2
+}
